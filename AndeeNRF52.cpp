@@ -5,12 +5,11 @@
 #include <Arduino.h>
 #include <stdlib.h>
 
-#include <BLEDevice.h>
-#include <BLEUtils.h>
-#include <BLEServer.h>
-#include <AndeeESP32.h>
+#include <bluefruit.h>
+#include <AndeeNRF52.h>
 
-char AndeeESPVersion[5] = {'0','.','1','.','0'};
+char AndeeNRF52Version[5] = {'0','.','1','.','0'};
+char versionBuff[10];
 
 int nameFlag = 0;
 int buttonNumber = 24;
@@ -18,8 +17,9 @@ char buttonBuffer[50];
 
 char sensorsBuffer[64];
 
-char readBuffer[128];
+char readBuffer[80];
 char readPartBuffer[64];
+uint16_t current_len;
 char phoneBuffer[64];
 char sliderBuffer[MAXSLIDER][20];
 
@@ -42,84 +42,85 @@ AndeeClass Andee;
 //                                                                                                    //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define SERVICE_UUID        		"516e7d03-c4ea-4103-9bd2-c560221a0c16"
-#define CHARACTERISTIC_READ_UUID 	"516e7d05-c4ea-4103-9bd2-c560221a0c16"
-#define CHARACTERISTIC_WRITE_UUID 	"516e7d04-c4ea-4103-9bd2-c560221a0c16"
+// SERVICE_UUID        			"516e7d03-c4ea-4103-9bd2-c560221a0c16"
+// CHARACTERISTIC_READ_UUID 	"516e7d05-c4ea-4103-9bd2-c560221a0c16"
+// CHARACTERISTIC_WRITE_UUID 	"516e7d04-c4ea-4103-9bd2-c560221a0c16"
 
-BLEDevice AndeeBT;
-BLEServer *AndeeBTServer = NULL;
-BLECharacteristic AndeeBTWrite( CHARACTERISTIC_WRITE_UUID,BLECharacteristic::PROPERTY_NOTIFY);
-BLECharacteristic AndeeBTRead(  CHARACTERISTIC_READ_UUID,BLECharacteristic::PROPERTY_WRITE);
-BLEAdvertising btAdvertise;
-BLEAdvertisementData adData;
-
-class AndeeCharacteristicCallback : public BLECharacteristicCallbacks 
-{
-  void onWrite(BLECharacteristic *pCharacteristic)
-  {    
-	unsigned int mLen;
-	unsigned int rLen;
-	char buffer[20];
-	
-    std::string value = pCharacteristic->getValue();
-    if(value.length() > 0)
-    {
-		memset(buffer,0x00,20);
-		
-		mLen = value.length();
-		
-		for(int i = 0;i<mLen;i++)
-		{
-			buffer[i] = value[i];
-		}
-		
-		buffer[mLen] = '\0';    
-		
-		if(readPartBuffer[0] != 0x00)
-		{
-			memcpy(readPartBuffer+(strlen(readPartBuffer)),buffer,mLen);
-		}
-		else
-		{
-			memset(readPartBuffer,0x00,64);				
-			memcpy(readPartBuffer,buffer,mLen);			
-		}		
-		
-		rLen = strlen(readPartBuffer);
-		
-		for(unsigned int b = 0; b < rLen ;b++)
-		{
-			
-			if(readPartBuffer[b] == END_TAG_REPLY)
-			{
-				
-				readPartBuffer[b] = '\0';
-				memset(readBuffer,0x00,128);
-				memcpy(readBuffer,readPartBuffer,rLen);
-				memset(readPartBuffer,0x00,64);
-			}
-		}
-	}
-  }
-};
-
-class AndeeServerCallback : public BLEServerCallbacks
-{
-  void onConnect(BLEServer* pServer)
-  {
-    AndeeConnected = true;
-	versionAndClear = false;  
-    Serial.println("Connected!");
-  };
-  void onDisconnect(BLEServer* pServer)
-  {
-    AndeeConnected = false;
-	resetBLEFlag = false;
-    Serial.println("Disconnected!");
-  }
+const uint8_t SERVICE_UUID[] = { 0x16, 0x0C, 0x1A, 0x22, 0x60, 0xC5, 0xD2, 0x9B, 0X03, 0x41, 0xEA, 0xC4, 0x03, 0x7D, 0x6E, 0x51 };
   
-};
+const uint8_t CHARACTERISTIC_READ_UUID[] = { 0x16, 0x0C, 0x1A, 0x22, 0x60, 0xC5, 0xD2, 0x9B, 0X03, 0x41, 0xEA, 0xC4, 0x05, 0x7D, 0x6E, 0x51 };
+  
+const uint8_t CHARACTERISTIC_WRITE_UUID[] = { 0x16, 0x0C, 0x1A, 0x22, 0x60, 0xC5, 0xD2, 0x9B, 0X03, 0x41, 0xEA, 0xC4, 0x04, 0x7D, 0x6E, 0x51 };
 
+BLEUuid service_uuid = BLEUuid(SERVICE_UUID);
+BLEUuid char_read_uuid = BLEUuid(CHARACTERISTIC_READ_UUID);
+BLEUuid char_write_uuid = BLEUuid(CHARACTERISTIC_WRITE_UUID);
+
+BLEService   service = BLEService(service_uuid);
+BLECharacteristic AndeeRx = BLECharacteristic(char_read_uuid);
+BLECharacteristic AndeeTx = BLECharacteristic(char_write_uuid);
+
+//////////////////////BT Callbacks///////////////////
+void connect_callback(uint16_t conn_handle)
+{
+  char central_name[32] = { 0 };
+  Bluefruit.Gap.getPeerName(conn_handle, central_name, sizeof(central_name));
+
+  Serial.print("Connected to ");
+  Serial.println(central_name);
+  
+  AndeeConnected = true;
+  //versionAndClear = false;
+  
+  btSend(versionBuff);
+}
+
+void disconnect_callback(uint16_t conn_handle, uint8_t reason)
+{
+  (void) conn_handle;
+  (void) reason;
+
+  Serial.println("Disconnected");
+  Serial.println("Advertising!");
+  
+  AndeeConnected = false;
+  resetBLEFlag = false;
+}
+
+void read_callback(BLECharacteristic& chr, uint8_t* data, uint16_t len, uint16_t offset)
+{
+  Serial.print("read(");Serial.print(len);Serial.print("):");Serial.write((const char*)data,len);
+  
+  if(len > 0)
+  {
+	  if(readPartBuffer[0] != 0x00)
+	  {
+		  memcpy(readPartBuffer+(current_len),data,len);
+		  current_len = current_len + len; 
+	  }
+	  else
+	  {
+		  memset(readPartBuffer,0x00,64);
+		  memcpy(readPartBuffer,data,len);
+		  current_len = len;
+	  }
+	  
+	  for(unsigned int b = 0; b < current_len ;b++)
+	  {
+		  if(readPartBuffer[b] == END_TAG_REPLY)
+		  {			
+			readPartBuffer[b] = '\0';
+			memset(readBuffer,0x00,80);
+			memcpy(readBuffer,readPartBuffer,current_len + 1);
+			memset(readPartBuffer,0x00,64);
+		  }
+	  }
+	  
+  }
+}
+/////////////////////////////////////////////////////
+
+///////////////Send BT function/////////////////
 void btSend(char* UI)
 {
   char partialUI[18];
@@ -134,17 +135,15 @@ void btSend(char* UI)
       {
         memset(partialUI,0x00,18);
         memcpy(partialUI, UI + i, 18);
-
-        AndeeBTWrite.setValue((uint8_t*)partialUI,18);    
-        AndeeBTWrite.notify();
+        
+		AndeeTx.notify((const char*)partialUI,18);
+		delay(3);
         i = i + 18;     
-        delay(10);      
       }
     }
     else
     {
-      AndeeBTWrite.setValue((uint8_t*)UI,18);
-      AndeeBTWrite.notify();
+      AndeeTx.notify((const char*)partialUI,18);
     }
   }
 }
@@ -206,7 +205,26 @@ void systemTime(void)
 	memset(msgToPhone,0x00,18);
 }
 
+void dtostrf(int value,int zero, int decPlace,char*)
+{
+	char newColor[5];
+	memset(newColor,0x00,5);
+}
 
+void versionNumber(void)
+{
+	memset(versionBuff,0x00,10);
+	versionBuff[0] = START_TAG_VERSION;
+	versionBuff[1] = '1';
+	versionBuff[2] = SEPARATOR;
+	versionBuff[3] = AndeeNRF52Version[0];
+	versionBuff[4] = AndeeNRF52Version[1];
+	versionBuff[5] = AndeeNRF52Version[2];
+	versionBuff[6] = AndeeNRF52Version[3];
+	versionBuff[7] = AndeeNRF52Version[4];
+	versionBuff[8] = END_TAG_VERSION;
+	versionBuff[9] = '\0';		
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //                                                                                           //
@@ -290,7 +308,7 @@ void processReply()
 			}
 		}
     
-		memset(readBuffer,0x00,128);
+		memset(readBuffer,0x00,80);
 	}
 	else if(readBuffer[0] == TIMEEPOCH)
 	{
@@ -330,38 +348,38 @@ void processReply()
 		sysTime = atol(buffer) + (gmt*3600) + (dst*3600) ;
 		sprintf(phoneBuffer,"%ld",sysTime);
 		//setTime(sysTime);
-		memset(readBuffer,0x00,128);
+		memset(readBuffer,0x00,80);
 	}
 	else if(readBuffer[0] == JOYSTICK)
 	{
 		memset(phoneBuffer,0x00,64);
 		memcpy(phoneBuffer,readBuffer,10);
 		phoneBuffer[9] = '\0';
-		memset(readBuffer,0x00,128);		
+		memset(readBuffer,0x00,80);		
 	}
 	else if(readBuffer[0] == GYRO)
 	{
 		memset(sensorsBuffer,0x00,64);		
 		memcpy(sensorsBuffer,readBuffer+2,strlen(readBuffer)-2);
-		memset(readBuffer,0x00,128);
+		memset(readBuffer,0x00,80);
 	}
 	else if(readBuffer[0] == LAC)
 	{
 		memset(sensorsBuffer,0x00,64);		
 		memcpy(sensorsBuffer,readBuffer+2,strlen(readBuffer)-2);
-		memset(readBuffer,0x00,128);
+		memset(readBuffer,0x00,80);
 	}
 	else if(readBuffer[0] == GRAV)
 	{
 		memset(sensorsBuffer,0x00,64);		
 		memcpy(sensorsBuffer,readBuffer+2,strlen(readBuffer)-2);
-		memset(readBuffer,0x00,128);
+		memset(readBuffer,0x00,80);
 	}
 	else if(readBuffer[0] == GPS)
 	{
 		memset(sensorsBuffer,0x00,64);		
 		memcpy(sensorsBuffer,readBuffer+2,strlen(readBuffer)-2);
-		memset(readBuffer,0x00,128);
+		memset(readBuffer,0x00,80);
 	}
 	
 	else if(readBuffer[0] == WATCH)
@@ -398,12 +416,12 @@ void processReply()
 				
 			}
 		}
-		memset(readBuffer,0x00,128);
+		memset(readBuffer,0x00,80);
 	}
 	 else if(readBuffer[0] == 0x88)
 	{
 		AndeeAlive= true;
-		memset(readBuffer,0x00,128);
+		memset(readBuffer,0x00,80);
 		Serial.println("testing receivers");	
 		return;
 	}
@@ -413,7 +431,7 @@ void processReply()
 	}
 	else
 	{
-		memset(readBuffer,0x00,128);
+		memset(readBuffer,0x00,80);
 		Serial.println("Command not recognised");
 	} 
 }
@@ -443,7 +461,7 @@ bool AndeeClass::isConnected()
 {
 	/* if(AndeeAlive == true)
 	{
-		AndeeESP.sendVersion();
+		AndeeNRF52.sendVersion();
 		AndeeAlive = false;
 	}
 	return AndeeConnected; */
@@ -454,17 +472,16 @@ bool AndeeClass::isConnected()
 
 void AndeeClass::broadcast()
 {
-	//BLECentral central = AndeeESPPeripheral.central();
+	//BLECentral central = AndeeNRF52Peripheral.central();
 }
 
 void AndeeClass::resetBLE()
 {
 	if(resetBLEFlag == false)
 	{		
-		btAdvertise.start();
 		memset(buttonBuffer,0x00,50);
 		memset(phoneBuffer,0x00,64);
-		memset(readBuffer,0x00,128);
+		memset(readBuffer,0x00,80);
 		memset(readPartBuffer,0x00,64);
 		memset(sliderBuffer,0x00,64);
 		resetBLEFlag = true;
@@ -473,40 +490,47 @@ void AndeeClass::resetBLE()
 
 void AndeeClass::begin(const char* name)
 {
-	AndeeBT.init(name);//initialise bt device
-  
-	BLEServer *AndeeBTServer = AndeeBT.createServer();
-	AndeeBTServer->setCallbacks(new AndeeServerCallback());
 	
-	AndeeBTRead.setCallbacks(new AndeeCharacteristicCallback());
-	
-	BLEService *AndeeBTService = AndeeBTServer->createService(SERVICE_UUID);
-	AndeeBTService->addCharacteristic(&AndeeBTWrite);
-	AndeeBTService->addCharacteristic(&AndeeBTRead);
-	AndeeBTService->start();   
+	/////////////Start Bluefruit
+	Bluefruit.begin();
+	Bluefruit.setName(name);  
+	Bluefruit.setConnectCallback(connect_callback);
+	Bluefruit.setDisconnectCallback(disconnect_callback);
 
-	adData.setCompleteServices( AndeeBTService->getUUID());
-	adData.setAppearance(384);
+	/////////////Create Service and Characteristics
+	service.begin();//begin service before attaching characteristics
 
-	btAdvertise.setAdvertisementData(adData);  
-	btAdvertise.start();
+	AndeeTx.setProperties(CHR_PROPS_NOTIFY);  
+	AndeeTx.begin();
+
+	AndeeRx.setProperties(CHR_PROPS_WRITE);
+	AndeeRx.setWriteCallback(read_callback);
+	AndeeRx.begin();  
+
+	/////////////Set and start advertising
+	Bluefruit.Advertising.addService(service);
+	Bluefruit.Advertising.addName();
+	Bluefruit.Advertising.restartOnDisconnect(true);
+	Bluefruit.Advertising.start(0);
 	
 	memset(buttonBuffer,0x00,50);
 	memset(phoneBuffer,0x00,64);
-	memset(readBuffer,0x00,128);
+	memset(readBuffer,0x00,80);
 	memset(readPartBuffer,0x00,64);
 	memset(sliderBuffer,0x00,64);
+	
+	versionNumber();
 }
 void AndeeClass::begin()
 {
-	begin("AndeeESP32");
+	begin("AndeeNRF52");
 }
 
 
 
 void AndeeClass::poll()
 {
-	//AndeeESPPeripheral.poll();
+	//AndeeNRF52Peripheral.poll();
 	resetBLE();
 	processReply();
 }
@@ -557,11 +581,11 @@ void AndeeClass::sendVersion(void)
 	buffer[0] = START_TAG_VERSION;
 	buffer[1] = '1';
 	buffer[2] = SEPARATOR;
-	buffer[3] = AndeeESPVersion[0];
-	buffer[4] = AndeeESPVersion[1];
-	buffer[5] = AndeeESPVersion[2];
-	buffer[6] = AndeeESPVersion[3];
-	buffer[7] = AndeeESPVersion[4];
+	buffer[3] = AndeeNRF52Version[0];
+	buffer[4] = AndeeNRF52Version[1];
+	buffer[5] = AndeeNRF52Version[2];
+	buffer[6] = AndeeNRF52Version[3];
+	buffer[7] = AndeeNRF52Version[4];
 	buffer[8] = END_TAG_VERSION;
 	buffer[9] = '\0';
 	
@@ -1544,7 +1568,7 @@ void AndeeHelper::getJoystick(int* x,int* y)
 void AndeeHelper::update(void)
 {
 	Andee.versionClear();
-	//AndeeESP.isConnected();
+	//AndeeNRF52.isConnected();
 	
 	if(bleBuffer[1] == DATA_OUT)	
 	{

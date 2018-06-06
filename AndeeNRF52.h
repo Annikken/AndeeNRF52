@@ -26,6 +26,8 @@ void systemTime(void);
 //This function will send a 'T' to the smartphone. This will trigger the app to send back the system time expressed in milliseconds since the Epoch.
 //The bytes sent are ASTART,'T',AEND
 
+void versionNumber(void);
+
 
 //This function deals with replies from the smartphone or tablet. 
 //The data being sent from the smartphone to the board will be similar to the data sent from the Arduin0 101 to the smartphone. The data will be broken into 18 byte packets and sent to the board. 
