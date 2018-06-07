@@ -70,9 +70,9 @@ void connect_callback(uint16_t conn_handle)
   Serial.println(central_name);
   
   AndeeConnected = true;
-  //versionAndClear = false;
+  versionAndClear = false;
   
-  btSend(versionBuff);
+  //btSend(versionBuff);
 }
 
 void disconnect_callback(uint16_t conn_handle, uint8_t reason)
@@ -136,14 +136,14 @@ void btSend(char* UI)
         memset(partialUI,0x00,18);
         memcpy(partialUI, UI + i, 18);
         
-		AndeeTx.notify((const char*)partialUI,18);
-		delay(3);
-        i = i + 18;     
+		AndeeTx.notify((const char*)partialUI);
+		delay(10);
+        i = i + 18;
       }
     }
     else
     {
-      AndeeTx.notify((const char*)partialUI,18);
+      AndeeTx.notify((const char*)UI);
     }
   }
 }
@@ -154,12 +154,26 @@ void btSend(char* UI)
 //                                                                                                    //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+void printHEX(const char* title,char* buffer)
+{
+	int len = strlen(buffer);
+	Serial.print(title);Serial.print(":");
+	for(int i = 0; i< len; i++)
+	{
+		Serial.print(" ");
+		Serial.print((unsigned char)buffer[i],HEX );
+	}
+	Serial.println("");
+}
+
 void convertColor (const char* colorBuffer, char* outputColor)//converting color from 0 to 255 to 32 to 200
 {
     int x = 0;
     char tmp[3];
     int colorByte;
     char newColor[5];
+	
+	printHEX("oldColor",(char*)colorBuffer);
 
     for(x = 0; x < 4; x++ )
     {
@@ -170,6 +184,7 @@ void convertColor (const char* colorBuffer, char* outputColor)//converting color
         newColor[x] = (char)colorByte;
     }
     newColor[4] = '\0';
+	printHEX("newColor",newColor);
 	strcpy(outputColor,newColor);
     /* if(type == SET_COLOR )
     {
@@ -193,7 +208,6 @@ void convertColor (const char* colorBuffer, char* outputColor)//converting color
         //printHex("titleFont",titleFontBuffer,andeeLog);
     }     */
 }
-
 
 void systemTime(void)
 {
@@ -225,6 +239,8 @@ void versionNumber(void)
 	versionBuff[8] = END_TAG_VERSION;
 	versionBuff[9] = '\0';		
 }
+
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //                                                                                           //
@@ -501,13 +517,20 @@ void AndeeClass::begin(const char* name)
 	service.begin();//begin service before attaching characteristics
 
 	AndeeTx.setProperties(CHR_PROPS_NOTIFY);  
+	AndeeTx.setPermission(SECMODE_OPEN, SECMODE_OPEN);//(SECMODE_OPEN, SECMODE_NO_ACCESS)
+	AndeeTx.setMaxLen(20);
+	AndeeTx.setFixedLen(20);
 	AndeeTx.begin();
 
-	AndeeRx.setProperties(CHR_PROPS_WRITE);
+	AndeeRx.setProperties(CHR_PROPS_WRITE | CHR_PROPS_WRITE_WO_RESP);
 	AndeeRx.setWriteCallback(read_callback);
+	AndeeRx.setPermission(SECMODE_OPEN, SECMODE_OPEN);//(SECMODE_NO_ACCESS, SECMODE_OPEN)
+	AndeeRx.setMaxLen(20);
+	AndeeRx.setFixedLen(20);
 	AndeeRx.begin();  
 
 	/////////////Set and start advertising
+	Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
 	Bluefruit.Advertising.addService(service);
 	Bluefruit.Advertising.addName();
 	Bluefruit.Advertising.restartOnDisconnect(true);
@@ -575,21 +598,8 @@ long AndeeClass::getDeviceTimeStamp(void)
 }
 
 void AndeeClass::sendVersion(void)
-{
-	char buffer[10];
-	memset(buffer,0x00,10);
-	buffer[0] = START_TAG_VERSION;
-	buffer[1] = '1';
-	buffer[2] = SEPARATOR;
-	buffer[3] = AndeeNRF52Version[0];
-	buffer[4] = AndeeNRF52Version[1];
-	buffer[5] = AndeeNRF52Version[2];
-	buffer[6] = AndeeNRF52Version[3];
-	buffer[7] = AndeeNRF52Version[4];
-	buffer[8] = END_TAG_VERSION;
-	buffer[9] = '\0';
-	
-	btSend(buffer);
+{	
+	btSend(versionBuff);
 	delay(5);	
 }
 
@@ -1641,7 +1651,7 @@ void AndeeHelper::update(void)
 		sprintf(bleBuffer,"%c%c%c%c%c%s%s%c%s%c", START_TAG_UIXYWH,WATCH,SEPARATOR,watchBuffer,SEPARATOR,titleBGBuffer,titleFontBuffer,SEPARATOR,titleBuffer,END_TAG_UIXYWH);
 	}
 	
-	//printHEX(bleBuffer);
+	printHEX("bleBuffer",bleBuffer);
 	btSend(bleBuffer);
 	delay(5);
 }
