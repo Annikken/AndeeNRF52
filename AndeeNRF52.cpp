@@ -123,26 +123,29 @@ void read_callback(BLECharacteristic& chr, uint8_t* data, uint16_t len, uint16_t
 ///////////////Send BT function/////////////////
 void btSend(char* UI)
 {
-  char partialUI[18];
+#define PACKET_LEN 20
+  char partialUI[PACKET_LEN];
   int msgLen = 0;
 
   msgLen = strlen(UI);
   if(AndeeConnected == true)
   {
-    if(msgLen >= 19)
+    if(msgLen > PACKET_LEN)
     {
       for (int i = 0; i <= msgLen;)
       {
-        memset(partialUI,0x00,18);
-        memcpy(partialUI, UI + i, 18);
+        memset(partialUI,0x00,PACKET_LEN);
+        memcpy(partialUI, UI + i, PACKET_LEN);
+		printHEX("BTMsg",partialUI);
         
 		AndeeTx.notify((const char*)partialUI);
-		delay(10);
-        i = i + 18;
+		delay(5);
+        i = i + PACKET_LEN;
       }
     }
     else
     {
+	  printHEX("BTMsg:",UI);
       AndeeTx.notify((const char*)UI);
     }
   }
@@ -165,6 +168,14 @@ void printHEX(const char* title,char* buffer)
 	}
 	Serial.println("");
 }
+void printHEX(const char* title,char buffer)
+{
+	Serial.print(title);Serial.print(":");	
+	Serial.print(" ");
+	Serial.print((unsigned char)buffer,HEX );	
+	Serial.println("");
+}
+
 
 void convertColor (const char* colorBuffer, char* outputColor)//converting color from 0 to 255 to 32 to 200
 {
@@ -172,41 +183,20 @@ void convertColor (const char* colorBuffer, char* outputColor)//converting color
     char tmp[3];
     int colorByte;
     char newColor[5];
-	
-	printHEX("oldColor",(char*)colorBuffer);
 
     for(x = 0; x < 4; x++ )
     {
         strncpy(tmp,colorBuffer + x*2,2);
-        tmp[2] = '\0';
-        sscanf(tmp,"%X",&colorByte);
+		tmp[2] = '\0';
+		
+        sscanf(tmp,"%x",&colorByte);		
+		
         colorByte = ((colorByte * 200) / 255) + 32;
         newColor[x] = (char)colorByte;
     }
+	
     newColor[4] = '\0';
-	printHEX("newColor",newColor);
-	strcpy(outputColor,newColor);
-    /* if(type == SET_COLOR )
-    {
-        strcpy(bodyBGBuffer,newColor);
-        //printHex("bodyBG",bodyBGBuffer,andeeLog);
-    }
-    else if(type == SET_TEXT_COLOR)
-    {
-        strcpy(bodyFontBuffer,newColor);
-        //printHex("bodyFont",bodyFontBuffer,andeeLog);
-    }
-    else if(type == SET_TITLE_COLOR)
-    {
-        strcpy(titleBGBuffer,newColor);
-        //printHex("titleBG",titleBGBuffer,andeeLog);
-
-    }
-    else if(type == SET_TITLE_TEXT_COLOR)
-    {
-        strcpy(titleFontBuffer,newColor);
-        //printHex("titleFont",titleFontBuffer,andeeLog);
-    }     */
+	strcpy(outputColor,newColor);   
 }
 
 void systemTime(void)
@@ -506,6 +496,7 @@ void AndeeClass::resetBLE()
 
 void AndeeClass::begin(const char* name)
 {
+	Serial.begin(115200);
 	
 	/////////////Start Bluefruit
 	Bluefruit.begin();
@@ -518,15 +509,11 @@ void AndeeClass::begin(const char* name)
 
 	AndeeTx.setProperties(CHR_PROPS_NOTIFY);  
 	AndeeTx.setPermission(SECMODE_OPEN, SECMODE_OPEN);//(SECMODE_OPEN, SECMODE_NO_ACCESS)
-	AndeeTx.setMaxLen(20);
-	AndeeTx.setFixedLen(20);
 	AndeeTx.begin();
 
 	AndeeRx.setProperties(CHR_PROPS_WRITE | CHR_PROPS_WRITE_WO_RESP);
 	AndeeRx.setWriteCallback(read_callback);
 	AndeeRx.setPermission(SECMODE_OPEN, SECMODE_OPEN);//(SECMODE_NO_ACCESS, SECMODE_OPEN)
-	AndeeRx.setMaxLen(20);
-	AndeeRx.setFixedLen(20);
 	AndeeRx.begin();  
 
 	/////////////Set and start advertising
@@ -543,6 +530,8 @@ void AndeeClass::begin(const char* name)
 	memset(sliderBuffer,0x00,64);
 	
 	versionNumber();
+	
+	Serial.println("Andee NRF52 Ready!");
 }
 void AndeeClass::begin()
 {
@@ -1651,7 +1640,7 @@ void AndeeHelper::update(void)
 		sprintf(bleBuffer,"%c%c%c%c%c%s%s%c%s%c", START_TAG_UIXYWH,WATCH,SEPARATOR,watchBuffer,SEPARATOR,titleBGBuffer,titleFontBuffer,SEPARATOR,titleBuffer,END_TAG_UIXYWH);
 	}
 	
-	printHEX("bleBuffer",bleBuffer);
+	//printHEX("bleBuffer",bleBuffer);
 	btSend(bleBuffer);
 	delay(5);
 }

@@ -14,6 +14,9 @@ extern bool versionAndClear;
 extern bool resetBLEFlag;
 
 
+void printHEX(const char*,char*);
+
+
 void btSend(char*);
 //This function transfers data from the board to the connected BLE device. Since the board can only send data in 18 byte packets, this function automatically cuts the data up into 18 byte packets and send them one after the other to the target. 
 
