@@ -89,7 +89,9 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason)
 
 void read_callback(BLECharacteristic& chr, uint8_t* data, uint16_t len, uint16_t offset)
 {
-  Serial.print("read(");Serial.print(len);Serial.print("):");Serial.write((const char*)data,len);
+	(void) offset;
+	
+  Serial.println("");printHEX("read",(char*)data);
   
   if(len > 0)
   {
@@ -114,8 +116,7 @@ void read_callback(BLECharacteristic& chr, uint8_t* data, uint16_t len, uint16_t
 			memcpy(readBuffer,readPartBuffer,current_len + 1);
 			memset(readPartBuffer,0x00,64);
 		  }
-	  }
-	  
+	  }	  
   }
 }
 /////////////////////////////////////////////////////
@@ -240,7 +241,11 @@ void versionNumber(void)
 
 void processReply()
 {
-	unsigned char pressBuffer = 0;	
+	unsigned char pressBuffer = 0;
+	if(readBuffer[0] != 0x00)
+	{
+		printHEX("readBuffer" , readBuffer);
+	}	
 	
 	if (	readBuffer[0] == BUTTON_IN || readBuffer[0] == KEYBOARD_IN|| 
 			readBuffer[0] == TIME_IN || readBuffer[0] == DATE_IN || readBuffer[0] == CIRCLE_BUTTON)		
