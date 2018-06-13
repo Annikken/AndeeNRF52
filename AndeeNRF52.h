@@ -45,7 +45,7 @@ void versionNumber(void);
 void processReply();
 //This function processes the replies from the smart device
 
-class AndeeClass
+class AndeeClass : public BLEUart
 {
 	public:
 	
@@ -55,8 +55,8 @@ class AndeeClass
 	
 	void resetBLE(void);	 
 	
-	void begin(const char*);
-	void begin(void);
+	void start(const char*);
+	void start(void);
 	//This is needed to start the BLE services
 	
 	void broadcast(void);

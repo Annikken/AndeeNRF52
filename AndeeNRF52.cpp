@@ -19,6 +19,7 @@ char sensorsBuffer[64];
 
 char readBuffer[80];
 char readPartBuffer[64];
+int bufferCount = 0;
 uint16_t current_len;
 char phoneBuffer[64];
 char sliderBuffer[MAXSLIDER][20];
@@ -118,6 +119,7 @@ void read_callback(BLECharacteristic& chr, uint8_t* data, uint16_t len, uint16_t
 		  }
 	  }	  
   }
+  
 }
 /////////////////////////////////////////////////////
 
@@ -137,17 +139,17 @@ void btSend(char* UI)
       {
         memset(partialUI,0x00,PACKET_LEN);
         memcpy(partialUI, UI + i, PACKET_LEN);
-		printHEX("BTMsg",partialUI);
+		//printHEX("BTMsg",partialUI);
         
-		AndeeTx.notify((const char*)partialUI);
+		Andee.write( (const uint8_t*)partialUI, PACKET_LEN);
 		delay(5);
         i = i + PACKET_LEN;
       }
     }
     else
     {
-	  printHEX("BTMsg:",UI);
-      AndeeTx.notify((const char*)UI);
+	  //printHEX("BTMsg:",UI);
+      Andee.write((const uint8_t*)UI,PACKET_LEN);
     }
   }
 }
@@ -246,6 +248,10 @@ void processReply()
 	{
 		printHEX("readBuffer" , readBuffer);
 	}	
+	else
+	{
+		Serial.print("no reply");
+	}
 	
 	if (	readBuffer[0] == BUTTON_IN || readBuffer[0] == KEYBOARD_IN|| 
 			readBuffer[0] == TIME_IN || readBuffer[0] == DATE_IN || readBuffer[0] == CIRCLE_BUTTON)		
@@ -499,7 +505,7 @@ void AndeeClass::resetBLE()
 	}
 }
 
-void AndeeClass::begin(const char* name)
+void AndeeClass::start(const char* name)
 {
 	Serial.begin(115200);
 	
@@ -509,17 +515,11 @@ void AndeeClass::begin(const char* name)
 	Bluefruit.setConnectCallback(connect_callback);
 	Bluefruit.setDisconnectCallback(disconnect_callback);
 
-	/////////////Create Service and Characteristics
-	service.begin();//begin service before attaching characteristics
-
-	AndeeTx.setProperties(CHR_PROPS_NOTIFY);  
-	AndeeTx.setPermission(SECMODE_OPEN, SECMODE_OPEN);//(SECMODE_OPEN, SECMODE_NO_ACCESS)
-	AndeeTx.begin();
-
-	AndeeRx.setProperties(CHR_PROPS_WRITE | CHR_PROPS_WRITE_WO_RESP);
-	AndeeRx.setWriteCallback(read_callback);
-	AndeeRx.setPermission(SECMODE_OPEN, SECMODE_OPEN);//(SECMODE_NO_ACCESS, SECMODE_OPEN)
-	AndeeRx.begin();  
+	setUuid(service_uuid);
+    _txd.setUuid(char_write_uuid);
+    _rxd.setUuid(char_read_uuid);
+	
+	begin();
 
 	/////////////Set and start advertising
 	Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
@@ -538,18 +538,40 @@ void AndeeClass::begin(const char* name)
 	
 	Serial.println("Andee NRF52 Ready!");
 }
-void AndeeClass::begin()
+void AndeeClass::start()
 {
-	begin("AndeeNRF52");
+	start("AndeeNRF52");
 }
-
 
 
 void AndeeClass::poll()
 {
 	//AndeeNRF52Peripheral.poll();
 	resetBLE();
-	processReply();
+	while(Andee.available())
+	{
+		char ch;
+		ch = (char)Andee.read();
+		Serial.print(ch,HEX);Serial.print(" ");
+		
+		if(ch == 0x00)
+		{
+			Serial.println("");
+			memset(readBuffer,0x00,80);
+			memcpy(readBuffer,readPartBuffer, (bufferCount-1) );
+			processReply();
+			
+			memset(readPartBuffer,0x00,64);
+			bufferCount = 0;
+			
+		}
+		else
+		{
+			readPartBuffer[bufferCount++] = ch;
+		}		 
+	}
+	
+	
 }
 
 void AndeeClass::clear()
