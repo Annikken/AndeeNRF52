@@ -142,7 +142,7 @@ void btSend(char* UI)
 		//printHEX("BTMsg",partialUI);
         
 		Andee.write( (const uint8_t*)partialUI, PACKET_LEN);
-		delay(5);
+		delay(1);
         i = i + PACKET_LEN;
       }
     }
