@@ -33,7 +33,7 @@ boolean updateUI = false;
 // only when it starts up.
 void setup()
 {
-  Andee.begin();  // Setup communication between Annikken Andee and Arduino
+  Andee.start();  // Setup communication between Annikken Andee and Arduino
   setInitialData(); // Define object types and their appearance
 
   pinMode(pinLED, OUTPUT); // Configures pin 13 for output.

@@ -21,7 +21,7 @@ AndeeHelper objectB;
 AndeeHelper objectC;
 void setup()
 {
-  Andee.begin();  // Setup the board to start broadcasting as an Annikken Andee peripheral
+  Andee.start();  // Setup the board to start broadcasting as an Annikken Andee peripheral
   setInitialData();  // Define the UI objects and customise their appearance
 }
  

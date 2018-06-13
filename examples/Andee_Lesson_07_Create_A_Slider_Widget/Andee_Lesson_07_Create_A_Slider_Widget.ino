@@ -26,7 +26,7 @@ int lastA, lastB;
 // only when it starts up.
 void setup()
 {
-  Andee.begin();//Setup the board to start broadcasting as an Annikken Andee peripheral 
+  Andee.start();//Setup the board to start broadcasting as an Annikken Andee peripheral 
   Andee.clear();  // Clear the screen of any previous displays
   setInitialData();  // Define object types and their appearance
 }

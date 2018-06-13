@@ -22,7 +22,7 @@ AndeeHelper btn4;
 bool UpdateFlag = false;
 
 void setup() {
-  Andee.begin();// Setup the board to start broadcasting as an Annikken Andee peripheral 
+  Andee.start();// Setup the board to start broadcasting as an Annikken Andee peripheral 
   setInitialData();// Define object types and their appearance
 }
 

@@ -26,7 +26,7 @@ int counter = 0;
 // only when it starts up.
 void setup()
 {
-  Andee.begin("Andee");  // Setup the board to start broadcasting as an Annikken Andee peripheral 
+  Andee.start("Andee");  // Setup the board to start broadcasting as an Annikken Andee peripheral 
   setInitialData();  // Define the UI objects and customise their appearance
 }
 
