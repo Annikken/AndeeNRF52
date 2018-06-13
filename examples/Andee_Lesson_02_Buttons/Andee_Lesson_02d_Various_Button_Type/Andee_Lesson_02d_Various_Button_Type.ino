@@ -15,7 +15,7 @@
 
 AndeeHelper displayBtn; 
 AndeeHelper btn1;
-AndeeHelper btn2;9
+AndeeHelper btn2;
 AndeeHelper btn3;
 AndeeHelper btn4;
 

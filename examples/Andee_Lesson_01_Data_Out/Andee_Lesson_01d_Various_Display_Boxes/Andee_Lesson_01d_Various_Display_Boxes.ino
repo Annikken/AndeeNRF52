@@ -10,10 +10,8 @@
 ************************************************************/
 // Always include these libraries. Annikken Andee needs them
 // to work with the Arduino!
-#include <BLEDevice.h>
-#include <BLEUtils.h>
-#include <BLEServer.h>
-#include <AndeeESP32.h>
+#include <bluefruit.h>
+#include <AndeeNRF52.h>
 
 // Every object that appears on your smartphone's screen
 // needs to be declared like this:
